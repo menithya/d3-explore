@@ -63,9 +63,7 @@
             // console.log(result)
             store.routes = result[0];
             store.geoJSON = result[1];
-            // return store
-            // drawAirlineChart(store.routes)
-
+            
         },function(error){
             console.log(error)
 
@@ -104,7 +102,7 @@
         let yScale = d3.scaleBand()
                         .range([0,bodyHeight])
                         .domain(airlines.map(a => a.AirlineName))
-                        .padding(0.2)
+                        .padding(0.1)
 
         return {xScale,yScale}
 
@@ -114,7 +112,7 @@
         let {margin,container} = config;
         let {xScale,yScale} = scales;
         let body = container.append('g')
-                    .style("transform",`translate(${margin.let}px,${margin.top})`)
+                    .style("transform",`translate(${margin.left}px, ${margin.top}px)`)
 
         let bars = body.selectAll('.bar')
                         .data(airlines)
@@ -132,6 +130,46 @@
         let config = getAirlinesChartConfig();
         let scales = getAirlinesChartScales(airlines,config);
         drawBarAirlinesChart(airlines,scales,config)
+     }
+
+     function getMapConfig(){
+        let width = 600;
+        let height = 400;
+        let container =  d3.select("#map")
+
+        container.attr("width",width)
+                 .attr("height",height)
+
+        return {width, height, container}
+     }
+
+     function getMapProjection(config){
+        let {width, height} = config;
+        let projection = d3.geoMercator();
+        projection.scale(97)
+                  .translate([width/2,height/2+20])
+        store.mapProjection = projection
+        return projection;
+     }
+
+     function drawBaseMap(container,countries,projection){
+        let path = d3.geoPath()
+                     .projection(projection)
+
+        container.selectAll("path")
+                 .data(countries)
+                 .enter()
+                 .append("path")
+                 .attr("d", (d) => path(d))
+                 .attr("stroke","#ccc")
+                 .attr("fill","#eee")
+     }
+
+     function drawMap(geoJSON){
+
+        let config = getMapConfig()
+        let projection = getMapProjection(config)
+        drawBaseMap(config.container,geoJSON.features,projection)
      }
 
      function groupByAirLine(data){
@@ -154,6 +192,82 @@
 
      }
 
+     function groupByAirport(data){
+        let result = data.reduce((result,d) => {
+            let currentDest = result[d.DestAirportID] || {
+                "AirportID": d.DestAirportID,
+                "Airport": d.DestAirport,
+                "Latitude": +d.DestLatitude,
+                "Longitude": +d.DestLongitude,
+                "City": d.DestCity,
+                "Country": d.DestCountry,
+                "Count": 0
+            }
+
+            currentDest.count +=1
+            result[d.DestAirportID] = currentDest
+
+            let currentSource= result[d.SourceAirportID] || {
+                "AirportID": d.DestAirportID,
+                "Airport": d.DestAirport,
+                "Latitude": +d.DestLatitude,
+                "Longitude": +d.DestLongitude,
+                "City": d.DestCity,
+                "Country": d.DestCountry,
+                "Count": 0
+            }
+
+           currentSource.count += 1
+           result[d.SourceAirportID] = currentSource 
+           return result 
+        },{})
+
+        console.log(result)
+        result = Object.keys(result).map(key => result[key])
+        console.log(result)
+        return result
+
+    }
+
+    function drawAirports(airports){
+
+        let config = getMapConfig()
+        let projection = getMapProjection(config)
+        let container = config.container
+        store.projection = projection
+
+        let circles = container.selectAll("circle")
+        circles.data(airports)
+               .enter()
+               .append("circle")
+               .attr("r",1)
+               .attr("cx", d => projection([+d.Longitude,+d.Latitude])[0])
+               .attr("cy", d => projection([+d.Longitude,+d.Latitude])[1])
+               .style("fill","#2a5599")
+
+               
+    }
+
+    function drawRoutes(airlineID){
+        let routes = store.routes;
+        let projection = store.projection;
+        let container = d3.select("#Map")
+        let selectedRoutes = routes.filter(item  => item.AirlineID == airlineID)
+        let bindedData = container.selectAll("line")
+                            .data(selectedRoutes, d => d.ID)
+                            .enter()
+                            .append("line")
+                            .attr("x1",d => projection([+d.SourceLongitude,+d.SourceLatitude])[0])
+                            .attr("y1",d => projection([+d.SourceLongitude,+d.SourceLatitude])[1])
+                            .attr("x2",d => projection([+d.DestLongitude,+d.DestLatitude])[0])
+                            .attr("y2",d => projection([+d.DestLongitude,+d.DestLatitude])[1])
+                            .style("stroke","#992a2a")
+                            
+                            .style("opacity",0.1)
+        bindedData.exit().remove()
+
+    }
+
      function showData() {
           //Get the routes from our store variable
           let routes = store.routes
@@ -161,6 +275,10 @@
           let airlines = groupByAirLine(store.routes);
           // console.log(airlines)
           drawAirlineChart(airlines)
+          drawMap(store.geoJSON)
+          let airports = groupByAirport(store.routes)
+          drawAirports(airports)
+          drawRoutes('596')
         }
 
      loadData().then(showData)
