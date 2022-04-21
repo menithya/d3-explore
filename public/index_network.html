@@ -50,10 +50,20 @@
         
     </div>
 
+     <h1>Network with edges and node</h1>
+    <div id="edgesLinksAction">
+        
+    </div>
+
+     <h1>Network with Filtter</h1>
+    <div id="edgesLinksFilters">
+        
+    </div>
+
 
 </body>
  <script type="text/javascript" src="https://d3js.org/d3.v5.min.js"></script>
- <script type="text/javascript">
+<script type="text/javascript">
      
 (function(){
 
@@ -209,13 +219,11 @@ let roleScale = d3.scaleOrdinal()
         if(!d3.event.active) force.alphaTarget(0.3).restart()
             d.fx = d.x
             d.fy = d.y
-
     }
 
     function onDragging(d){
         d.fx = d3.event.x
         d.fy = d3.event.y
-
     }
 
     function onDragEnd(d){
@@ -223,16 +231,239 @@ let roleScale = d3.scaleOrdinal()
 
             d.fx = null
             d.fy = null
-
     }
 
- 
-
-
-
-    })()
+  })()
 
 
  </script>
+
+<script>
+ (function(){
+
+        Promise.all([
+        d3.csv("nodelist.csv"),
+        d3.csv("edgelist.csv")
+    ]).then(function(data){
+        console.log(data)
+        createForceLayout(data[0],data[1])
+    })
+
+ function createForceLayout(nodes,edges){
+
+   let nodeHash = {}
+   nodes.forEach(node =>{
+        nodeHash[node.id] = node
+
+   });
+
+   edges.forEach(edge => {
+    edge.weight = +edge.weight
+    edge.source = nodeHash[edge.source]
+    edge.target = nodeHash[edge.target]
+   })
+
+   var roleScale = d3.scaleOrdinal()
+        .domain(["contractor", "employee", "manager"])
+        .range(["red", "blue", "green"]);
+
+   let simulaiton = d3.forceSimulation()
+                        .force("charge", d3.forceManyBody())
+                        .force("center", d3.forceCenter().x(500/2).y(400/2))
+                        .force("link",d3.forceLink().strength(-40))
+                        // .force("x", d3.forceX(-40))
+                        // .force("y", d3.forceY(-40))
+                        .nodes(nodes)
+                        .on("tick", onTicks)
+
+    
+    var container = d3.select("#edgesLinksAction")
+                       .append("svg") 
+                       .attr("width",500)
+                       .attr("height",400)                   
+
+    circleNodes = container.selectAll("circle")
+        .data(nodes)
+        .enter()
+        .append("circle")
+        .attr("r",10)
+        .style("fill", d => roleScale(d.role))
+        // .append("text")
+        //   .style("text-anchor", "middle")
+        //   .attr("y", 15)
+        //   .text(d => d.id);
+
+
+   links= container.selectAll("line")
+                .data(edges)
+                .enter()
+                .append("line")
+                .style("stroke", "#ccc")
+                .style("stroke-width", d => d.weight)
+
+    function onTicks(){
+
+    links.attr("x1", function(d) { 
+                    return d.source.x; 
+             })
+     .attr("y1", function(d) { return d.source.y; })
+     .attr("x2", function(d) { return d.target.x; })
+     .attr("y2", function(d) { return d.target.y; });
+
+     // circleNodes.attr("transform", d => `translate(${d.x},${d.y})`)
+     circleNodes.attr("cx", function(d) { return d.x; })
+     .attr("cy", function(d) { return d.y; });
+    }
+
+    let drag = d3.drag()
+    drag.on("drag", onDragging)
+    function onDragging(d){
+        d.fx = d3.event.x
+        d.fy = d3.event.y 
+
+        if(simulaiton.alpha() < 0.1){
+            simulaiton.alpha(0.1)
+            simulaiton.restart()
+        }
+    }
+
+    circleNodes.call(drag)
+    // container.on("click",filterNetwork)
+
+    function filterNetwork(){
+        simulaiton.stop()
+        let originalNodes = simulaiton.nodes()
+        let originalLinks = simulaiton.force("link").links()
+
+        let influentialNodes = originalNodes.filter(d => d.role === "employee");
+        let influentialLinks = originalLinks.filter(d => influentialNodes.indexOf(d.source) > -1 &&
+                                                         influentialNodes.indexOf(d.target) > -1)
+        container.selectAll("circle")
+                   .data(influentialNodes, d => d.id)
+                   .exit()
+                   .remove()
+    }
+
+ }
+
+   })() 
+    
+
+</script>
+<script>
+    
+    (function(){
+
+        Promise.all([
+            d3.csv("nodelist.csv"),
+            d3.csv("edgelist.csv")
+        ]).then(function(data){
+            console.log(data)
+            createForceLayout(data[0],data[1])
+        })
+      
+      function createForceLayout(nodes,edges){
+
+       let nodeHash = {}
+       nodes.forEach(node =>{
+            nodeHash[node.id] = node
+
+       });
+
+       edges.forEach(edge => {
+        edge.weight = +edge.weight
+        edge.source = nodeHash[edge.source]
+        edge.target = nodeHash[edge.target]
+       })
+
+       var roleScale = d3.scaleOrdinal()
+            .domain(["contractor", "employee", "manager"])
+            .range(["red", "blue", "green"]);
+
+       let linksForce = d3.forceLink().strength(d => d.weight * .1)
+
+       let simulaiton = d3.forceSimulation()
+                            .force("charge", d3.forceManyBody())
+                            .force("center", d3.forceCenter().x(500/2).y(400/2))
+                            .force("link",linksForce)
+                            // .force("x", d3.forceX(-40))
+                            // .force("y", d3.forceY(-40))
+                            .nodes(nodes)
+                            .on("tick", onTicks)
+
+        simulaiton.force("link").links(edges);
+
+        let container = d3.select("#edgesLinksFilters")
+                       .append("svg") 
+                       .attr("width",500)
+                       .attr("height",400)                   
+
+       
+
+         circle_node = container.selectAll("circle")
+                    .data(nodes)
+                    .enter()
+                    .append("circle")
+                    .attr("r",10)
+                    .style("fill", d => roleScale(d.role)) 
+
+          links_edges = container.selectAll("line")
+                .data(edges)
+                .enter()
+                .append("line")
+                .style("stroke", "#ccc")
+                .style("stroke-width", d => d.weight)
+
+       container.on("click",filterNetwork)
+
+       function onTicks() {
+          links_edges.attr("x1", function(d) { return d.source.x;})
+               .attr("y1", function(d) { return d.source.y; })
+               .attr("x2", function(d) { return d.target.x; })
+               .attr("y2", function(d) { return d.target.y; });
+
+     // circleNodes.attr("transform", d => `translate(${d.x},${d.y})`)
+             circle_node.attr("cx", function(d) { return d.x; })
+             .attr("cy", function(d) { return d.y; });
+        }
+
+       function filterNetwork(){
+
+            simulaiton.stop()
+            let originalNodes = simulaiton.nodes()
+            let originalLinks = simulaiton.force("link").links()
+
+            let influentialNodes = originalNodes.filter(d => d.role === "employee");
+            let influentialLinks = originalLinks.filter(d => influentialNodes.indexOf(d.source) > -1 &&
+                                                             influentialNodes.indexOf(d.target) > -1)
+            container.selectAll("circle")
+                       .data(influentialNodes, d => d.id)
+                       .exit()
+                       // .transition()
+                       // .duration(10000)
+                       // .style("opacity", 0)
+                       .remove();
+
+            container.selectAll("line")
+                        .data(influentialLinks)
+                        .exit()
+                        // .transition()
+                        // .duration(10000)
+                        // .style("opacity", 0)
+                        .remove();
+
+            simulation
+            .nodes(influentialNodes);
+            simulation.force("link")
+            .links(influentialLinks);
+            simulation.alpha(0.1);
+            simulation.restart();
+
+       }
+    }
+ 
+
+    })();
+</script>
 
 </html>
